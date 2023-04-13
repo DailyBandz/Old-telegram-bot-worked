@@ -1,0 +1,152 @@
+import logging
+import sqlite3
+import os
+
+from telegram import Update, ParseMode
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
+from playsound import playsound
+
+# Enable logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Define states
+RECEIVED, NOT_RECEIVED, AWAITING_SCREENSHOT = range(3)
+
+# Define buttons
+RECEIVED_BUTTON = {'text': 'Received ✅', 'callback_data': 'received'}
+NOT_RECEIVED_BUTTON = {'text': 'Not Received ❌', 'callback_data': 'not_received'}
+CHECK_AGAIN_BUTTON = {'text': 'Check again 🤦🏾‍♂️', 'callback_data': 'check_again'}
+
+# Define environment variable for the token
+TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+
+
+# Define function to start the bot
+def start(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /start is issued."""
+    update.message.reply_text('Hi! Send me a message with your transaction details and I will record it.')
+
+
+# Define function to handle messages
+def transaction(update: Update, context: CallbackContext) -> None:
+    """Log the transaction amount and description."""
+    conn = sqlite3.connect('transactions.db')
+    c = conn.cursor()
+    try:
+        # Parse message to extract amount and description
+        message = update.message.text.split('\n')
+        logger.info(message)  # for debugging purposes only
+        sender = message[0]
+        amount = message[1].replace('£', '').replace(',', '')
+        bank = message[2]
+        receiver = message[3]
+        reference = message[4]
+
+        c.execute("DROP TABLE IF EXISTS transactions")
+        c.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY,
+                sender_name TEXT,
+                amount REAL,
+                bank TEXT,
+                receiver_name TEXT,
+                reference TEXT
+            )
+        """)
+
+        # Insert transaction into database
+        c.execute("INSERT INTO transactions (sender_name, amount, bank, receiver_name, reference) VALUES (?, ?, ?, ?, ?)", (sender, float(amount), bank, receiver, reference))
+
+        # Send message to user
+        playsound('success_sound.mp3')
+        keyboard = [[RECEIVED_BUTTON, NOT_RECEIVED_BUTTON]]
+        reply_markup = {'inline_keyboard': keyboard}
+        update.message.reply_text('Transaction recorded. Did you receive the payment?', reply_markup=reply_markup)
+        context.user_data['state'] = RECEIVED
+
+    except Exception as e:
+        playsound('error_sound.mp3')
+        update.message.reply_text('Error recording transaction.')
+        logger.error(f'Error recording transaction: {e}')
+
+    conn.commit()
+    conn.close()
+
+
+# Define function to handle callback queries
+def button(update: Update, context: CallbackContext) -> None:
+    """Handle button presses."""
+    query = update.callback_query
+    query.answer()
+
+    if query.data == 'received':
+        playsound('success_sound.mp3')
+        query.edit_message_text(text='Great! Thanks for confirming.')
+        context.user_data['state'] = None
+
+    elif query.data == 'not_received':
+        playsound('alert_sound.mp3')
+        query.edit_message_text(text='Please send a screenshot 📸')
+        context.user_data['state'] = AWAITING_SCREENSHOT
+
+    elif query.data == 'check_again':
+        playsound('success_sound.mp3')
+        keyboard = [[RE
+# Define function to handle images
+def image(update: Update, context: CallbackContext) -> None:
+    """Save the image and send a message."""
+    # Get the file id of the image
+    file_id = update.message.photo[-1].file_id
+
+    # Download the image and save it
+    new_file = context.bot.get_file(file_id)
+    new_file.download('screenshot.jpg')
+
+    # Send message to user
+    keyboard = [[{'text': 'Check again🤦🏾‍♂️', 'callback_data': 'check_again'}]]
+    reply_markup = {'inline_keyboard': keyboard}
+    update.message.reply_text('Thank you. Your issue has been reported and is being investigated.', reply_markup=reply_markup)
+
+    # Send sound to user
+    context.bot.send_voice(
+        chat_id=update.effective_chat.id,
+        voice=open('beep.mp3', 'rb'),
+        caption='Sound notification!'
+    )
+
+# Define function to handle help command
+def help_command(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /help is issued."""
+    update.message.reply_text('Send me a message with your transaction details and I will record it.')
+
+def main() -> None:
+    """Start the bot."""
+    # Create the Updater and pass it your bot's token.
+    updater = Updater(TELEGRAM_BOT_TOKEN)
+
+    # Get the dispatcher to register handlers
+    dispatcher = updater.dispatcher
+
+    # on different commands - answer in Telegram
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("help", help_command))
+
+    # on noncommand i.e message - echo the message on Telegram
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, transaction))
+    dispatcher.add_handler(MessageHandler(Filters.photo, image))
+    dispatcher.add_handler(CallbackQueryHandler(button))
+
+    # Start the Bot
+    updater.start_polling()
+
+    # Run the bot until you press Ctrl-C or the process receives SIGINT,
+    # SIGTERM or SIGABRT. This should be used most of the time, since
+    # start_polling() is non-blocking and will stop the bot gracefully.
+    updater.idle()
+
+
+if __name__ == '__main__':
+    main()
