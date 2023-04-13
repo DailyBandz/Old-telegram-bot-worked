@@ -94,7 +94,11 @@ def button(update: Update, context: CallbackContext) -> None:
 
     elif query.data == 'check_again':
         playsound('success_sound.mp3')
-        keyboard = [[RE
+        keyboard = [[RECEIVED_BUTTON, NOT_RECEIVED_BUTTON]]
+        reply_markup = {'inline_keyboard': keyboard}
+        query.edit_message_text(text='Have you received the payment now?', reply_markup=reply_markup)
+        context.user_data['state'] = RECEIVED
+
 # Define function to handle images
 def image(update: Update, context: CallbackContext) -> None:
     """Save the image and send a message."""
