@@ -1,0 +1,12 @@
+def button(update: Update, context: CallbackContext) -> None:
+    """Handle button press."""
+    query = update.callback_query
+
+    if query.data == 'not_received':
+        keyboard = [[{'text': 'Check again🤦🏾‍♂️', 'callback_data': 'check_again'}, {'text': 'Please send a Screenshot📸', 'callback_data': 'send_screenshot'}]]
+        reply_markup = {'inline_keyboard': keyboard}
+        query.edit_message_text(text='Please send a Screenshot📸', reply_markup=reply_markup)
+    elif query.data == 'check_again':
+        keyboard = [[{'text': 'Received ✅', 'callback_data': 'received'}, {'text': 'Not Received ❌', 'callback_data': 'not_received'}]]
+        reply_markup = {'inline_keyboard': keyboard}
+        query.edit_message_text(text='Did you receive the payment?', reply_markup=reply_markup)
