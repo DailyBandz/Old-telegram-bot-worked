@@ -1,0 +1,40 @@
+def transaction(update: Update, context: CallbackContext) -> None:
+    """Log the transaction amount and description."""
+    conn = sqlite3.connect('transactions.db')
+    c = conn.cursor()
+    try:
+        # Parse message to extract amount and description
+        message = update.message.text.split('\n')
+        print(message)  # for debugging purposes only
+        sender = message[0]
+        amount = message[1].replace('£', '').replace(',', '')
+        bank = message[2]
+        receiver = message[3]
+        reference = message[4]
+
+        c.execute("DROP TABLE IF EXISTS transactions")
+        c.execute("""
+            CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY,
+                sender_name TEXT,
+                amount REAL,
+                bank TEXT,
+                receiver_name TEXT,
+                reference TEXT
+            )
+        """)
+
+        # Insert transaction into database
+        c.execute("INSERT INTO transactions (sender_name, amount, bank, receiver_name, reference) VALUES (?, ?, ?, ?, ?)", (sender, float(amount), bank, receiver, reference))
+        conn.commit()
+
+        # Send message to user
+        keyboard = [[{'text': 'Received ✅', 'callback_data': 'received'}, {'text': 'Not Received ❌', 'callback_data': 'not_received'}]]
+        reply_markup = {'inline_keyboard': keyboard}
+        update.message.reply_text('Transaction recorded. Did you receive the payment?', reply_markup=reply_markup)
+
+    except Exception as e:
+        update.message.reply_text('Error recording transaction.')
+        logger.error(f'Error recording transaction: {e}')
+
+    conn.close()
